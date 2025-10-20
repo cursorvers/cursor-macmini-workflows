@@ -38,19 +38,31 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Detect Node project
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f package.json ]; then
+            echo "is_node=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_node=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs['node-version'] }}
           cache: npm
           cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+        if: ${{ steps.detect.outputs.is_node == 'true' }}
       - name: Install deps
         run: npm ci
+        if: ${{ steps.detect.outputs.is_node == 'true' }}
       - name: Test
-        if: ${{ inputs['run-tests'] != '' }}
+        if: ${{ steps.detect.outputs.is_node == 'true' && inputs['run-tests'] != '' }}
         run: ${{ inputs['run-tests'] }}
       - name: Build
-        if: ${{ inputs['run-build'] != '' }}
+        if: ${{ steps.detect.outputs.is_node == 'true' && inputs['run-build'] != '' }}
         run: ${{ inputs['run-build'] }}
       # （任意）Cursor CLI を使う場合のフック
       # - name: Cursor CLI (optional)
