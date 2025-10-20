@@ -1,0 +1,12 @@
+name: self-test
+on:
+  workflow_dispatch: {}
+jobs:
+  ci:
+    uses: ./.github/workflows/cursor-ci.yml
+    with:
+      working-directory: '.'
+      run-tests: ''
+      run-build: ''
+
+
