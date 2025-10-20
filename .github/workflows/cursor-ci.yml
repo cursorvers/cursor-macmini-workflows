@@ -52,11 +52,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs['node-version'] }}
-          cache: npm
-          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
         if: ${{ steps.detect.outputs.is_node == 'true' }}
       - name: Install deps
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci
+          elif [ -f yarn.lock ]; then
+            corepack enable || true
+            yarn install --immutable || yarn install --frozen-lockfile || yarn install
+          elif [ -f pnpm-lock.yaml ]; then
+            corepack enable || true
+            pnpm install --frozen-lockfile || pnpm install
+          else
+            npm install
+          fi
         if: ${{ steps.detect.outputs.is_node == 'true' }}
       - name: Test
         if: ${{ steps.detect.outputs.is_node == 'true' && inputs['run-tests'] != '' }}
