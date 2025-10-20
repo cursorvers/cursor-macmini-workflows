@@ -1,0 +1,87 @@
+name: cursor-ci
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        required: false
+        default: '20'
+      run-tests:
+        type: string
+        required: false
+        default: 'npm test --if-present'
+      run-build:
+        type: string
+        required: false
+        default: 'npm run build --if-present'
+      working-directory:
+        type: string
+        required: false
+        default: '.'
+    secrets:
+      CURSOR_API_KEY:
+        required: false # Cursor CLIを使う場合のみ
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs['node-version'] }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: Test
+        if: ${{ inputs['run-tests'] != '' }}
+        run: ${{ inputs['run-tests'] }}
+      - name: Build
+        if: ${{ inputs['run-build'] != '' }}
+        run: ${{ inputs['run-build'] }}
+      # （任意）Cursor CLI を使う場合のフック
+      # - name: Cursor CLI (optional)
+      #   if: ${{ env.CURSOR_API_KEY != '' }}
+      #   env:
+      #     CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+      #   run: |
+      #     npx -y @cursorai/cli@latest --version
+      #     # ここに安全なread-onlyなコマンドのみを記述
+      - name: Data protection guard
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 変更/新規ファイルを検出
+          MODIFIED=$(git diff --name-only)
+          UNTRACKED=$(git ls-files --others --exclude-standard)
+          echo "Modified:\n$MODIFIED\nUntracked:\n$UNTRACKED"
+          COMBINED=$(printf "%s\n%s" "$MODIFIED" "$UNTRACKED")
+          if echo "$COMBINED" | grep -E '^(?:@data/|30_Permanent/|@backups/)'; then
+            echo 'Error: forbidden directories were modified or files created (@data/, 30_Permanent/, @backups/).'
+            exit 1
+          fi
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            ${{ inputs.working-directory }}/dist
+            ${{ inputs.working-directory }}/coverage
+          if-no-files-found: ignore
+
+
